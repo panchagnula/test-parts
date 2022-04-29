@@ -1,0 +1,62 @@
+name: Trigger auto deployment for containerapp sisirap-test-2022-04-28
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/sisirap-test-2022-04-28-AutoDeployTrigger-085fe6c4-a441-453c-9c70-8c273903a46f.yml'
+
+  # Allow mannually trigger 
+  workflow_dispatch:      
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Log in to container registry
+        uses: docker/login-action@v1
+        with:
+          registry: ca93b4bc14a7acr.azurecr.io
+          username: ${{ secrets.SISIRAPTEST20220428_REGISTRY_USERNAME }}
+          password: ${{ secrets.SISIRAPTEST20220428_REGISTRY_PASSWORD }}
+
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ca93b4bc14a7acr.azurecr.io/sisirap-test-2022-04-28:${{ github.sha }}
+          file: ./Dockerfile
+          context: ./
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.SISIRAPTEST20220428_AZURE_CREDENTIALS }}
+
+
+      - name: Deploy to containerapp
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            echo "Installing containerapp extension"
+            az config set extension.use_dynamic_install=yes_without_prompt
+            echo "Starting Deploying"
+            az containerapp registry set -n sisirap-test-2022-04-28 -g sisirap-newrg --server ca93b4bc14a7acr.azurecr.io --username  ${{ secrets.SISIRAPTEST20220428_REGISTRY_USERNAME }} --password ${{ secrets.SISIRAPTEST20220428_REGISTRY_PASSWORD }}
+            az containerapp update -n sisirap-test-2022-04-28 -g sisirap-newrg --image ca93b4bc14a7acr.azurecr.io/sisirap-test-2022-04-28:${{ github.sha }}
